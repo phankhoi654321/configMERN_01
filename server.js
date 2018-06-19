@@ -25,7 +25,6 @@ mongoose
 
 //Passport middleware
 app.use(passport.initialize());
-
 //passport config
 require('./config/passport')(passport);     //passport is param from passport.js
 
