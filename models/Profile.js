@@ -3,7 +3,7 @@ const Schema = mongoose.Schema;
 
 //create schema
 const ProfileSchema = new Schema({
-  user: {
+  userId: {
     type: Schema.Types.ObjectId, //get userId from 'users' collection
     ref: "users" //'users' is the collection
   },
@@ -35,7 +35,7 @@ const ProfileSchema = new Schema({
   githubusername: {
     type: String
   },
-  exprience: [
+  experience: [
     {
       title: {
         type: String,
