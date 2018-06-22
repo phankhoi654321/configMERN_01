@@ -60,4 +60,4 @@ const PostSchema = new Schema({
 
 // PostSchema.plugin(timeZone , { paths: ['date'] });
 
-module.exports = Post = mongoose.model('post', PostSchema);
+module.exports = Post = mongoose.model("post", PostSchema);

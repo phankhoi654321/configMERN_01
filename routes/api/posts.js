@@ -35,10 +35,110 @@ router.post(
       text: req.body.text,
       name: req.body.name,
       avatar: req.body.avatar,
-      user: req.user.id
+      userId: req.user.id
     });
 
     newPost.save().then(post => res.json(post));
+  }
+);
+
+// @route   POST api/posts/like/:id
+// @desc    Like post
+// @access  Private
+router.post(
+  "/like/:id",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    Profile.findOne({ userId: req.user.id }).then(profile => {
+      Post.findById(req.params.id)
+        .then(post => {
+          if (
+            post.likes.filter(like => like.userId.toString() === req.user.id)
+              .length > 0
+            // lenh filter tao 1 array moi tu array chinh theo dieu kien, like.userId == userId dang nhap,
+            // neu co thi chieu day array >0
+          ) {
+            return res
+              .status(400)
+              .json({ alreadyliked: "User already liked this post" });
+          }
+
+          // Add user id to likes array
+          post.likes.unshift({ userId: req.user.id });
+
+          post.save().then(post => res.json(post));
+        })
+        .catch(err => res.status(404).json({ postnotfound: "No post found" }));
+    });
+  }
+);
+
+// @route   POST api/posts/unlike/:id
+// @desc    Unlike post
+// @access  Private
+router.post(
+  "/unlike/:id",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    Profile.findOne({ userId: req.user.id }).then(profile => {
+      Post.findById(req.params.id)
+        .then(post => {
+          if (
+            post.likes.filter(like => like.userId.toString() === req.user.id)
+              .length === 0
+          ) {
+            return res
+              .status(400)
+              .json({ notliked: "You have not yet liked this post" });
+          }
+
+          // Get remove index
+          const removeIndex = post.likes
+            .map(item => item.userId.toString())
+            .indexOf(req.user.id);
+
+          // Splice out of array
+          post.likes.splice(removeIndex, 1);
+
+          // Save
+          post.save().then(post => res.json(post));
+        })
+        .catch(err => res.status(404).json({ postnotfound: "No post found" }));
+    });
+  }
+);
+
+// @route   POST api/posts/comment/:id
+// @desc    Add comment to post
+// @access  Private
+router.post(
+  '/comment/:id',
+  passport.authenticate('jwt', { session: false }),
+  (req, res) => {
+    const { errors, isValid } = validatePostInput(req.body);
+
+    // Check Validation
+    if (!isValid) {
+      // If any errors, send 400 with errors object
+      return res.status(400).json(errors);
+    }
+
+    Post.findById(req.params.id)
+      .then(post => {
+        const newComment = {
+          text: req.body.text,
+          name: req.body.name,
+          avatar: req.body.avatar,
+          userId: req.user.id
+        };
+
+        // Add to comments array
+        post.comments.unshift(newComment);
+
+        // Save
+        post.save().then(post => res.json(post));
+      })
+      .catch(err => res.status(404).json({ postnotfound: 'No post found' }));
   }
 );
 
@@ -49,11 +149,30 @@ router.delete(
   "/:id",
   passport.authenticate("jwt", { session: false }),
   (req, res) => {
-    Profile.findOne({ user: req.user.id }).then(profile => {
+    Profile.findOne({ userId: req.user.id }).then(profile => {
+      console.log(req.user.id + " = " + profile.userId);
+      console.log(req.params.id);
+      // console.log(
+      //   Post.findById(req.params.id).then(post => {
+      //     post.remove().then(() => res.json({ success: true }));
+      //   })
+      // );
+
+      // Post.findById(req.params.id).then(post => {
+      //   if (post.userId !== req.user.id) {
+      //     return res
+      //       .status(401)
+      //       .json({ notauthorized: "User not authorized" });
+      //   }
+      //   // Delete
+      //   post.remove().then(() => res.json({ success: true }));
+      // });
+
       Post.findById(req.params.id)
         .then(post => {
           // Check for post owner
-          if (post.user.toString() !== req.user.id) {
+          // console.log(mongoose.Types.ObjectId(post.userId));
+          if (post.userId.toString() !== req.user.id) {
             return res
               .status(401)
               .json({ notauthorized: "User not authorized" });
@@ -61,9 +180,45 @@ router.delete(
 
           // Delete
           post.remove().then(() => res.json({ success: true }));
+          console.log("ok");
         })
         .catch(err => res.status(404).json({ postnotfound: "No post found" }));
     });
+  }
+);
+
+// @route   DELETE api/posts/comment/:id/:comment_id
+// @desc    Remove comment from post
+// @access  Private
+router.delete(
+  '/comment/:id/:comment_id',
+  passport.authenticate('jwt', { session: false }),
+  (req, res) => {
+    Post.findById(req.params.id)
+      .then(post => {
+        // Check to see if comment exists, mean length of array comment_id !== 0
+        if (
+          post.comments.filter(
+            comment => comment._id.toString() === req.params.comment_id
+          ).length === 0  // mean not exists
+          // Filter de tao ra array moi co cac comment._id == params.comment_id
+        ) {
+          return res
+            .status(404)
+            .json({ commentnotexists: 'Comment does not exist' });
+        }
+
+        // Get remove index
+        const removeIndex = post.comments
+          .map(item => item._id.toString())
+          .indexOf(req.params.comment_id);
+
+        // Splice comment out of array
+        post.comments.splice(removeIndex, 1);
+
+        post.save().then(post => res.json(post));
+      })
+      .catch(err => res.status(404).json({ postnotfound: 'No post found' }));
   }
 );
 
@@ -74,13 +229,6 @@ router.get("/", (req, res) => {
   Post.find()
     .sort({ date: -1 }) //http://mongoosejs.com/docs/api.html#query_Query-setOptions
     .then(posts => {
-      // var time = require('time')(Date);
-      // posts.date = new Date();
-      // posts.date.setTimezone(posts.date.timezone);
-
-      //     var localTime  = moment.utc(divUtc.text()).toDate();
-      // localTime = moment(localTime).format('YYYY-MM-DD HH:mm:ss');
-      // posts.date.text(localTime);
       res.json(posts);
     })
     .catch(err => res.status(404).json({ nopostsfound: "No posts found" }));
